@@ -1,0 +1,116 @@
+import streamlit as st
+import pandas as pd
+from fpdf import FPDF
+from datetime import datetime
+
+st.set_page_config(page_title="Calculadora de Riesgo Periodontal", page_icon="🦷")
+
+st.title("🦷 Calculadora de Riesgo Periodontal")
+st.markdown("Evalúa el riesgo periodontal del paciente según factores clínicos.")
+
+# 📌 Entrada de nombre
+nombre = st.text_input("Nombre del paciente")
+
+# Entradas clínicas
+edad = st.number_input("Edad del paciente", min_value=0, max_value=120, step=1)
+fuma = st.radio("¿El paciente fuma?", ["Sí", "No"])
+placa = st.selectbox("Grado de placa visible", ["Leve", "Moderada", "Severa"])
+profundidad = st.slider("Promedio de profundidad de sondaje (mm)", 0.0, 10.0, step=0.1)
+sangrado = st.radio("¿Hay sangrado al sondaje?", ["Sí", "No"])
+
+# Evaluación
+puntos = 0
+if edad > 50:
+    puntos += 1
+if fuma == "Sí":
+    puntos += 1
+if placa in ["Moderada", "Severa"]:
+    puntos += 1
+if profundidad > 4:
+    puntos += 1
+if sangrado == "Sí":
+    puntos += 1
+
+# Clasificación
+if puntos <= 1:
+    riesgo = "Bajo"
+    color = "✅"
+    recomendacion = "Control cada 6 meses."
+elif puntos <= 3:
+    riesgo = "Moderado"
+    color = "⚠️"
+    recomendacion = "Considerar control cada 3-4 meses."
+else:
+    riesgo = "Alto"
+    color = "🚨"
+    recomendacion = "Evaluación periodontal especializada."
+
+# Mostrar resultado
+st.subheader("Resultado")
+st.markdown(f"**Puntaje total:** {puntos} / 5")
+st.markdown(f"**Nivel de riesgo:** {color} {riesgo}")
+st.markdown(f"**Recomendación:** {recomendacion}")
+
+# Guardar datos
+if st.button("Guardar evaluación"):
+    if nombre.strip() == "":
+        st.warning("Por favor, ingresa el nombre del paciente.")
+    else:
+        nueva_fila = {
+            "Fecha": datetime.today().strftime("%Y-%m-%d"),
+            "Nombre": nombre,
+            "Edad": edad,
+            "Fuma": fuma,
+            "Placa": placa,
+            "Profundidad": profundidad,
+            "Sangrado": sangrado,
+            "Puntaje": puntos,
+            "Riesgo": riesgo,
+            "Recomendación": recomendacion
+        }
+
+        archivo = "historial_periodontal.xlsx"
+
+        try:
+            df_existente = pd.read_excel(archivo)
+            df_total = pd.concat([df_existente, pd.DataFrame([nueva_fila])], ignore_index=True)
+        except FileNotFoundError:
+            df_total = pd.DataFrame([nueva_fila])
+
+        df_total.to_excel(archivo, index=False)
+        st.success("✅ Evaluación guardada correctamente.")
+
+# Mostrar historial
+if st.checkbox("📋 Ver historial de pacientes"):
+    try:
+        df = pd.read_excel("historial_periodontal.xlsx")
+        st.dataframe(df)
+    except FileNotFoundError:
+        st.info("No hay evaluaciones guardadas todavía.")
+        
+if st.button("📄 Exportar evaluación a PDF"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pdf.cell(200, 10, txt="Evaluación de Riesgo Periodontal", ln=True, align='C')
+    pdf.cell(200, 10, txt=f"Fecha: {fecha_actual}", ln=True)
+
+    pdf.ln(10)
+    pdf.cell(200, 10, txt=f"Edad: {edad}", ln=True)
+    pdf.cell(200, 10, txt=f"Fuma: {fuma}", ln=True)
+    pdf.cell(200, 10, txt=f"Placa: {placa}", ln=True)
+    pdf.cell(200, 10, txt=f"Profundidad: {profundidad} mm", ln=True)
+    pdf.cell(200, 10, txt=f"Sangrado: {sangrado}", ln=True)
+    pdf.ln(10)
+    pdf.cell(200, 10, txt=f"Puntaje total: {puntos} / 5", ln=True)
+    pdf.cell(200, 10, txt=f"Nivel de riesgo: {riesgo}", ln=True)
+    pdf.cell(200, 10, txt=f"Recomendación: {recomendacion}", ln=True)
+
+    # Guardar y ofrecer descarga
+    pdf_file = "evaluacion_periodontal.pdf"
+    pdf.output(pdf_file)
+
+    with open(pdf_file, "rb") as f:
+        st.download_button("⬇️ Descargar PDF", f, file_name=pdf_file)
